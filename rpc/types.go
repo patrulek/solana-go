@@ -214,7 +214,7 @@ type TransactionMeta struct {
 	Rewards []BlockReward `json:"rewards"`
 
 	LoadedAddresses LoadedAddresses `json:"loadedAddresses"`
-	
+
 	ComputeUnitsConsumed *uint64 `json:"computeUnitsConsumed"`
 }
 
@@ -294,7 +294,7 @@ type Account struct {
 	Executable bool `json:"executable"`
 
 	// The epoch at which this account will next owe rent
-	RentEpoch uint64 `json:"rentEpoch"`
+	RentEpoch float64 `json:"rentEpoch"`
 }
 
 type DataBytesOrJSON struct {
