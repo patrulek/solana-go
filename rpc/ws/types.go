@@ -66,6 +66,7 @@ type params struct {
 type Options struct {
 	HttpHeader       http.Header
 	HandshakeTimeout time.Duration
+	PongWait         time.Duration
 }
 
 var DefaultHandshakeTimeout = 45 * time.Second

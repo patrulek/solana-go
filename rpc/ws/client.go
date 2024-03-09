@@ -43,6 +43,8 @@ type Client struct {
 	subscriptionByRequestID map[uint64]*Subscription
 	subscriptionByWSSubID   map[uint64]*Subscription
 	reconnectOnErr          bool
+	pongWait                time.Duration
+	pingPeriod              time.Duration
 }
 
 const (
@@ -80,6 +82,14 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 		dialer.HandshakeTimeout = opt.HandshakeTimeout
 	}
 
+	if opt != nil && opt.PongWait > 0 {
+		c.pongWait = opt.PongWait
+		c.pingPeriod = (c.pongWait * 9) / 10
+	} else {
+		c.pongWait = pongWait
+		c.pingPeriod = pingPeriod
+	}
+
 	var httpHeader http.Header = nil
 	if opt != nil && opt.HttpHeader != nil && len(opt.HttpHeader) > 0 {
 		httpHeader = opt.HttpHeader
@@ -91,8 +101,8 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 
 	c.connCtx, c.connCtxCancel = context.WithCancel(context.Background())
 	go func() {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
-		c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+		c.conn.SetReadDeadline(time.Now().Add(c.pongWait))
+		c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(c.pongWait)); return nil })
 		ticker := time.NewTicker(pingPeriod)
 		for {
 			select {
