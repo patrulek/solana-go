@@ -18,6 +18,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/gorilla/websocket"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 )
 
@@ -45,7 +47,10 @@ type Client struct {
 	reconnectOnErr          bool
 	pongWait                time.Duration
 	pingPeriod              time.Duration
+	subIDRetrievals         map[string]subIDRetrievalFunc
 }
+
+type subIDRetrievalFunc func([]byte) (uint64, bool)
 
 const (
 	// Time allowed to write a message to the peer.
@@ -70,6 +75,7 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 		rpcURL:                  rpcEndpoint,
 		subscriptionByRequestID: map[uint64]*Subscription{},
 		subscriptionByWSSubID:   map[uint64]*Subscription{},
+		subIDRetrievals:         make(map[string]subIDRetrievalFunc),
 	}
 
 	dialer := &websocket.Dialer{
@@ -88,6 +94,10 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 	} else {
 		c.pongWait = pongWait
 		c.pingPeriod = pingPeriod
+	}
+
+	if opt != nil && opt.UseSubIDRetrievals {
+		c.subIDRetrievals = defaultSubIDRetrievals
 	}
 
 	var httpHeader http.Header = nil
@@ -174,12 +184,32 @@ func getUint64WithOk(data []byte, path ...string) (uint64, bool) {
 func (c *Client) handleMessage(message []byte) {
 	// when receiving message with id. the result will be a subscription number.
 	// that number will be associated to all future message destine to this request
+	// such message should be no longer than 128 bytes
+	if len(message) < 128 {
+		var result struct {
+			ID     uint64 `json:"id"`
+			Result uint64 `json:"result"`
+		}
+		jsoniter.Unmarshal(message, &result)
+		if result.ID != 0 && result.Result != 0 {
+			c.handleNewSubscriptionMessage(result.ID, result.Result)
+			return
+		}
+	}
 
-	requestID, ok := getUint64WithOk(message, "id")
-	if ok {
-		subID, _ := getUint64WithOk(message, "result")
-		c.handleNewSubscriptionMessage(requestID, subID)
+	method, err := jsonparser.GetString(message, "method")
+	if err != nil {
+		zlog.Warn("unable to parse ws message method", zap.Error(err))
 		return
+	}
+
+	subIDRetrieval, retrievalOk := c.subIDRetrievals[method]
+	if retrievalOk {
+		subID, idOk := subIDRetrieval(message)
+		if idOk {
+			c.handleSubscriptionMessage(subID, message)
+			return
+		}
 	}
 
 	subID, _ := getUint64WithOk(message, "params", "subscription")
@@ -386,4 +416,62 @@ func decodeResponseFromMessage(r []byte, reply interface{}) (err error) {
 	}
 
 	return json.Unmarshal(*c.Params.Result, &reply)
+}
+
+var defaultSubIDRetrievals = map[string]subIDRetrievalFunc{
+	"transactionNotification": func(b []byte) (uint64, bool) {
+		// Subscription ID occurs only once and in the current Helius RPC implementation it is always at the beginning of message.
+		// Use this fact to not necessarily search the whole response for the subscription ID.
+		chunkEnd := 128
+		if len(b) < chunkEnd {
+			return 0, false
+		}
+
+		chunk := b[60:chunkEnd]
+		_, after, ok := bytes.Cut(chunk, []byte(`"subscription":`))
+		if !ok {
+			return 0, false
+		}
+
+		idx := bytes.IndexAny(after, " ,]}")
+		if idx == -1 {
+			return 0, false
+		}
+
+		id := bytes.TrimSpace(after[:idx])
+		subID, err := strconv.ParseUint(string(id), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+
+		return subID, true
+	},
+	"logsNotification": func(b []byte) (uint64, bool) {
+		// Subscription ID occurs only once and in the current Solana RPC implementation it is always at the end of message.
+		// Use this fact to not necessarily search the whole response for the subscription ID.
+		chunkSize := 64
+		if len(b) < chunkSize {
+			chunkSize = len(b)
+		}
+
+		chunk := b[len(b)-chunkSize:]
+		_, after, ok := bytes.Cut(chunk, []byte(`"subscription":`))
+		if !ok {
+			return 0, false
+		}
+
+		// The subscription ID is a number, so we can use the `bytes.ParseUint` function.
+		idx := bytes.IndexAny(after, " ,]}")
+		if idx == -1 {
+			return 0, false
+		}
+
+		id := bytes.TrimSpace(after[:idx])
+		subID, err := strconv.ParseUint(string(id), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+
+		return subID, true
+	},
 }

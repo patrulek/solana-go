@@ -65,9 +65,10 @@ type params struct {
 }
 
 type Options struct {
-	HttpHeader       http.Header
-	HandshakeTimeout time.Duration
-	PongWait         time.Duration
+	HttpHeader         http.Header
+	HandshakeTimeout   time.Duration
+	PongWait           time.Duration
+	UseSubIDRetrievals bool
 }
 
 var DefaultHandshakeTimeout = 45 * time.Second
