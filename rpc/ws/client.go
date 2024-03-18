@@ -48,9 +48,11 @@ type Client struct {
 	pongWait                time.Duration
 	pingPeriod              time.Duration
 	subIDRetrievals         map[string]subIDRetrievalFunc
+	txDiscarders            map[string]txDiscarderFunc
 }
 
 type subIDRetrievalFunc func([]byte) (uint64, bool)
+type txDiscarderFunc func([]byte) bool
 
 const (
 	// Time allowed to write a message to the peer.
@@ -76,6 +78,7 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 		subscriptionByRequestID: map[uint64]*Subscription{},
 		subscriptionByWSSubID:   map[uint64]*Subscription{},
 		subIDRetrievals:         make(map[string]subIDRetrievalFunc),
+		txDiscarders:            make(map[string]txDiscarderFunc),
 	}
 
 	dialer := &websocket.Dialer{
@@ -98,6 +101,10 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (
 
 	if opt != nil && opt.UseSubIDRetrievals {
 		c.subIDRetrievals = defaultSubIDRetrievals
+	}
+
+	if opt != nil && opt.DiscardFailedTxs {
+		c.txDiscarders = defaultTxDiscarders
 	}
 
 	var httpHeader http.Header = nil
@@ -200,6 +207,11 @@ func (c *Client) handleMessage(message []byte) {
 	method, err := jsonparser.GetString(message, "method")
 	if err != nil {
 		zlog.Warn("unable to parse ws message method", zap.Error(err))
+		return
+	}
+
+	txDiscarder, discarderOk := c.txDiscarders[method]
+	if discarderOk && txDiscarder(message) {
 		return
 	}
 
@@ -473,5 +485,34 @@ var defaultSubIDRetrievals = map[string]subIDRetrievalFunc{
 		}
 
 		return subID, true
+	},
+}
+
+var defaultTxDiscarders = map[string]txDiscarderFunc{
+	"logsNotification": func(b []byte) bool {
+		chunkStart := 192
+		chunkSize := 64
+
+		if len(b) < chunkStart+chunkSize {
+			return false
+		}
+
+		chunk := b[chunkStart : chunkStart+chunkSize]
+		_, after, ok := bytes.Cut(chunk, []byte(`"err":`))
+		if !ok {
+			return false
+		}
+
+		idx := bytes.IndexAny(after, " ,]}")
+		if idx == -1 {
+			return false
+		}
+
+		value := bytes.TrimSpace(after[:idx])
+		if bytes.Equal(value, []byte("null")) {
+			return false
+		}
+
+		return true
 	},
 }

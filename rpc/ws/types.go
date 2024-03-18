@@ -69,6 +69,7 @@ type Options struct {
 	HandshakeTimeout   time.Duration
 	PongWait           time.Duration
 	UseSubIDRetrievals bool
+	DiscardFailedTxs   bool
 }
 
 var DefaultHandshakeTimeout = 45 * time.Second
