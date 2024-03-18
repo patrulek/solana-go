@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+	"github.com/gagliardetto/solana-go"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
@@ -49,10 +50,18 @@ type Client struct {
 	pingPeriod              time.Duration
 	subIDRetrievals         map[string]subIDRetrievalFunc
 	txDiscarders            map[string]txDiscarderFunc
+	sigRetrievals           map[string]signatureRetrievalFunc
+	sigCache                LogsSignatureCache
 }
 
 type subIDRetrievalFunc func([]byte) (uint64, bool)
 type txDiscarderFunc func([]byte) bool
+type signatureRetrievalFunc func([]byte) solana.Signature
+
+type LogsSignatureCache interface {
+	Has(sig solana.Signature) bool
+	Set(sig solana.Signature)
+}
 
 const (
 	// Time allowed to write a message to the peer.
@@ -65,26 +74,33 @@ const (
 
 // Connect creates a new websocket client connecting to the provided endpoint.
 func Connect(ctx context.Context, rpcEndpoint string) (c *Client, err error) {
-	return ConnectWithOptions(ctx, rpcEndpoint, nil)
+	return ConnectWithOptions(ctx, rpcEndpoint, nil, nil)
 }
 
 // ConnectWithOptions creates a new websocket client connecting to the provided
 // endpoint with a http header if available The http header can be helpful to
 // pass basic authentication params as prescribed
 // ref https://github.com/gorilla/websocket/issues/209
-func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options) (c *Client, err error) {
+func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options, cache LogsSignatureCache) (c *Client, err error) {
 	c = &Client{
 		rpcURL:                  rpcEndpoint,
 		subscriptionByRequestID: map[uint64]*Subscription{},
 		subscriptionByWSSubID:   map[uint64]*Subscription{},
 		subIDRetrievals:         make(map[string]subIDRetrievalFunc),
 		txDiscarders:            make(map[string]txDiscarderFunc),
+		sigRetrievals:           make(map[string]signatureRetrievalFunc),
+		sigCache:                &defaultLogsSignatureCache{},
 	}
 
 	dialer := &websocket.Dialer{
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  DefaultHandshakeTimeout,
 		EnableCompression: true,
+	}
+
+	if cache != nil {
+		c.sigRetrievals = defaultSigRetrievals
+		c.sigCache = cache
 	}
 
 	if opt != nil && opt.HandshakeTimeout > 0 {
@@ -213,6 +229,15 @@ func (c *Client) handleMessage(message []byte) {
 	txDiscarder, discarderOk := c.txDiscarders[method]
 	if discarderOk && txDiscarder(message) {
 		return
+	}
+
+	sigRetrieval, sigRetrievalOk := c.sigRetrievals[method]
+	if sigRetrievalOk {
+		sig := sigRetrieval(message)
+		if c.sigCache.Has(sig) {
+			return
+		}
+		c.sigCache.Set(sig)
 	}
 
 	subIDRetrieval, retrievalOk := c.subIDRetrievals[method]
@@ -516,3 +541,58 @@ var defaultTxDiscarders = map[string]txDiscarderFunc{
 		return true
 	},
 }
+
+var defaultSigRetrievals = map[string]signatureRetrievalFunc{
+	"logsNotification": func(b []byte) solana.Signature {
+		chunkStart := 96
+		chunkSize := 128
+
+		if len(b) < chunkStart+chunkSize {
+			return solana.Signature{}
+		}
+
+		chunk := b[chunkStart : chunkStart+chunkSize]
+		_, after, ok := bytes.Cut(chunk, []byte(`"signature":"`))
+		if !ok {
+			return solana.Signature{}
+		}
+
+		idx := bytes.IndexAny(after, `"`)
+		if idx == -1 {
+			return solana.Signature{}
+		}
+
+		sig58 := bytes.TrimSpace(after[:idx])
+		sig, _ := solana.SignatureFromBase58(string(sig58))
+		return sig
+	},
+	"transactionNotification": func(b []byte) solana.Signature {
+		chunkStart := len(b) - 128
+		if chunkStart < 0 {
+			return solana.Signature{}
+		}
+
+		chunk := b[chunkStart:]
+		_, after, ok := bytes.Cut(chunk, []byte(`"signature":"`))
+		if !ok {
+			return solana.Signature{}
+		}
+
+		idx := bytes.IndexAny(after, `"`)
+		if idx == -1 {
+			return solana.Signature{}
+		}
+
+		sig58 := bytes.TrimSpace(after[:idx])
+		sig, _ := solana.SignatureFromBase58(string(sig58))
+		return sig
+	},
+}
+
+type defaultLogsSignatureCache struct{}
+
+func (c *defaultLogsSignatureCache) Has(sig solana.Signature) bool {
+	return false
+}
+
+func (c *defaultLogsSignatureCache) Set(sig solana.Signature) {}
