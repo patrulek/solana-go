@@ -109,7 +109,12 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options, c
 
 	if opt != nil && opt.PongWait > 0 {
 		c.pongWait = opt.PongWait
-		c.pingPeriod = (c.pongWait * 9) / 10
+
+		if opt.PingPeriod > 0 {
+			c.pingPeriod = opt.PingPeriod
+		} else {
+			c.pingPeriod = (c.pongWait * 9) / 10
+		}
 	} else {
 		c.pongWait = pongWait
 		c.pingPeriod = pingPeriod
@@ -136,7 +141,7 @@ func ConnectWithOptions(ctx context.Context, rpcEndpoint string, opt *Options, c
 	go func() {
 		c.conn.SetReadDeadline(time.Now().Add(c.pongWait))
 		c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(c.pongWait)); return nil })
-		ticker := time.NewTicker(pingPeriod)
+		ticker := time.NewTicker(c.pingPeriod)
 		for {
 			select {
 			case <-c.connCtx.Done():

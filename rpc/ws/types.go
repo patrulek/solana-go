@@ -68,6 +68,7 @@ type Options struct {
 	HttpHeader         http.Header
 	HandshakeTimeout   time.Duration
 	PongWait           time.Duration
+	PingPeriod         time.Duration
 	UseSubIDRetrievals bool
 	DiscardFailedTxs   bool
 }
