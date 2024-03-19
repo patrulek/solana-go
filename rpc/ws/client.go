@@ -161,6 +161,7 @@ func (c *Client) sendPing() {
 
 	c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 	if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+		zlog.Debug("unable to send ping message", zap.Error(err))
 		return
 	}
 }
