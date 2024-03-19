@@ -71,7 +71,7 @@ func Test_AccountSubscribeWithHttpHeader(t *testing.T) {
 		},
 	}
 
-	c, err := ConnectWithOptions(context.TODO(), "ws://api.mainnet-beta.solana.com:80", opt)
+	c, err := ConnectWithOptions(context.TODO(), "ws://api.mainnet-beta.solana.com:80", opt, nil)
 	defer c.Close()
 	require.NoError(t, err)
 
