@@ -231,6 +231,10 @@ func (c *Client) handleMessage(message []byte) {
 			c.handleNewSubscriptionMessage(result.ID, result.Result)
 			return
 		}
+
+		subID, _ := getUint64WithOk(message, "params", "subscription")
+		c.handleSubscriptionMessage(subID, message)
+		return
 	}
 
 	method, err := jsonparser.GetString(message, "method")
