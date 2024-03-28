@@ -17,6 +17,8 @@
 
 package ws
 
+import "fmt"
+
 type Subscription struct {
 	req               *request
 	subID             uint64
@@ -55,8 +57,10 @@ func (s *Subscription) Recv() (interface{}, error) {
 	}
 }
 
+var ErrCanceled = fmt.Errorf("subscription canceled by user")
+
 func (s *Subscription) Unsubscribe() {
-	s.unsubscribe(nil)
+	s.unsubscribe(ErrCanceled)
 }
 
 func (s *Subscription) unsubscribe(err error) {

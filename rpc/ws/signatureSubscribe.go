@@ -15,8 +15,8 @@
 package ws
 
 import (
+	"context"
 	"fmt"
-	"time"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
@@ -95,10 +95,10 @@ func (sw *SignatureSubscription) Response() <-chan *SignatureResult {
 
 var ErrTimeout = fmt.Errorf("timeout waiting for confirmation")
 
-func (sw *SignatureSubscription) RecvWithTimeout(timeout time.Duration) (*SignatureResult, error) {
+func (sw *SignatureSubscription) RecvWithContext(ctx context.Context) (*SignatureResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*SignatureResult), nil
 	case err := <-sw.sub.err:

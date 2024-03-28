@@ -15,7 +15,7 @@
 package ws
 
 import (
-	"time"
+	"context"
 
 	"github.com/gagliardetto/solana-go"
 )
@@ -70,10 +70,10 @@ func (sw *VoteSubscription) Recv() (*VoteResult, error) {
 	}
 }
 
-func (sw *VoteSubscription) RecvWithTimeout(timeout time.Duration) (*VoteResult, error) {
+func (sw *VoteSubscription) RecvWithContext(ctx context.Context) (*VoteResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*VoteResult), nil
 	case err := <-sw.sub.err:

@@ -15,7 +15,7 @@
 package ws
 
 import (
-	"time"
+	"context"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
@@ -118,10 +118,10 @@ func (sw *LogSubscription) Recv() (*LogResult, error) {
 	}
 }
 
-func (sw *LogSubscription) RecvWithTimeout(timeout time.Duration) (*LogResult, error) {
+func (sw *LogSubscription) RecvWithContext(ctx context.Context) (*LogResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*LogResult), nil
 	case err := <-sw.sub.err:

@@ -15,7 +15,7 @@
 package ws
 
 import (
-	"time"
+	"context"
 
 	"github.com/gagliardetto/solana-go"
 )
@@ -90,10 +90,10 @@ func (sw *SlotsUpdatesSubscription) Recv() (*SlotsUpdatesResult, error) {
 	}
 }
 
-func (sw *SlotsUpdatesSubscription) RecvWithTimeout(timeout time.Duration) (*SlotsUpdatesResult, error) {
+func (sw *SlotsUpdatesSubscription) RecvWithContext(ctx context.Context) (*SlotsUpdatesResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*SlotsUpdatesResult), nil
 	case err := <-sw.sub.err:

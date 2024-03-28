@@ -14,7 +14,7 @@
 
 package ws
 
-import "time"
+import "context"
 
 type SlotResult struct {
 	Parent uint64 `json:"parent"`
@@ -56,10 +56,10 @@ func (sw *SlotSubscription) Recv() (*SlotResult, error) {
 	}
 }
 
-func (sw *SlotSubscription) RecvWithTimeout(timeout time.Duration) (*SlotResult, error) {
+func (sw *SlotSubscription) RecvWithContext(ctx context.Context) (*SlotResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*SlotResult), nil
 	case err := <-sw.sub.err:

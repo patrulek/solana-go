@@ -14,7 +14,7 @@
 
 package ws
 
-import "time"
+import "context"
 
 type RootResult uint64
 
@@ -53,10 +53,10 @@ func (sw *RootSubscription) Recv() (*RootResult, error) {
 	}
 }
 
-func (sw *RootSubscription) RecvWithTimeout(timeout time.Duration) (*RootResult, error) {
+func (sw *RootSubscription) RecvWithContext(ctx context.Context) (*RootResult, error) {
 	select {
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case d := <-sw.sub.stream:
 		return d.(*RootResult), nil
 	case err := <-sw.sub.err:
