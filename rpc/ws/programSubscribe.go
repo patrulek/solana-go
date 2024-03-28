@@ -15,6 +15,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 )
@@ -88,6 +90,17 @@ type ProgramSubscription struct {
 
 func (sw *ProgramSubscription) Recv() (*ProgramResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*ProgramResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *ProgramSubscription) RecvWithTimeout(timeout time.Duration) (*ProgramResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*ProgramResult), nil
 	case err := <-sw.sub.err:

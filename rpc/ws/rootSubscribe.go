@@ -14,6 +14,8 @@
 
 package ws
 
+import "time"
+
 type RootResult uint64
 
 // SignatureSubscribe subscribes to receive notification
@@ -44,6 +46,17 @@ type RootSubscription struct {
 
 func (sw *RootSubscription) Recv() (*RootResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*RootResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *RootSubscription) RecvWithTimeout(timeout time.Duration) (*RootResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*RootResult), nil
 	case err := <-sw.sub.err:

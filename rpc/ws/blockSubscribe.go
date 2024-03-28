@@ -16,6 +16,7 @@ package ws
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
@@ -143,6 +144,17 @@ type BlockSubscription struct {
 
 func (sw *BlockSubscription) Recv() (*BlockResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*BlockResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *BlockSubscription) RecvWithTimeout(timeout time.Duration) (*BlockResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*BlockResult), nil
 	case err := <-sw.sub.err:

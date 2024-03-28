@@ -14,6 +14,8 @@
 
 package ws
 
+import "time"
+
 type SlotResult struct {
 	Parent uint64 `json:"parent"`
 	Root   uint64 `json:"root"`
@@ -47,6 +49,17 @@ type SlotSubscription struct {
 
 func (sw *SlotSubscription) Recv() (*SlotResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*SlotResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *SlotSubscription) RecvWithTimeout(timeout time.Duration) (*SlotResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*SlotResult), nil
 	case err := <-sw.sub.err:

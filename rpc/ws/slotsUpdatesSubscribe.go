@@ -14,7 +14,11 @@
 
 package ws
 
-import "github.com/gagliardetto/solana-go"
+import (
+	"time"
+
+	"github.com/gagliardetto/solana-go"
+)
 
 type SlotsUpdatesResult struct {
 	// The parent slot.
@@ -79,6 +83,17 @@ type SlotsUpdatesSubscription struct {
 
 func (sw *SlotsUpdatesSubscription) Recv() (*SlotsUpdatesResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*SlotsUpdatesResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *SlotsUpdatesSubscription) RecvWithTimeout(timeout time.Duration) (*SlotsUpdatesResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*SlotsUpdatesResult), nil
 	case err := <-sw.sub.err:

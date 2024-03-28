@@ -15,6 +15,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/gagliardetto/solana-go"
 )
 
@@ -61,6 +63,17 @@ type VoteSubscription struct {
 
 func (sw *VoteSubscription) Recv() (*VoteResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*VoteResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *VoteSubscription) RecvWithTimeout(timeout time.Duration) (*VoteResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*VoteResult), nil
 	case err := <-sw.sub.err:
