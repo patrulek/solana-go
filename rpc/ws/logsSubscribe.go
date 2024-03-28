@@ -15,6 +15,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 )
@@ -109,6 +111,17 @@ type LogSubscription struct {
 
 func (sw *LogSubscription) Recv() (*LogResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*LogResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *LogSubscription) RecvWithTimeout(timeout time.Duration) (*LogResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*LogResult), nil
 	case err := <-sw.sub.err:

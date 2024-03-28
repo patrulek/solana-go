@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 )
@@ -122,6 +124,17 @@ type TransactionSubscription struct {
 
 func (sw *TransactionSubscription) Recv() (*TransactionResult, error) {
 	select {
+	case d := <-sw.sub.stream:
+		return d.(*TransactionResult), nil
+	case err := <-sw.sub.err:
+		return nil, err
+	}
+}
+
+func (sw *TransactionSubscription) RecvWithTimeout(timeout time.Duration) (*TransactionResult, error) {
+	select {
+	case <-time.After(timeout):
+		return nil, ErrTimeout
 	case d := <-sw.sub.stream:
 		return d.(*TransactionResult), nil
 	case err := <-sw.sub.err:
