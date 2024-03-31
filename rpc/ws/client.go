@@ -225,8 +225,27 @@ func (c *Client) handleMessage(message []byte) {
 		var result struct {
 			ID     uint64 `json:"id"`
 			Result uint64 `json:"result"`
+			Error  *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
 		}
-		jsoniter.Unmarshal(message, &result)
+
+		if err := jsoniter.Unmarshal(message, &result); err != nil {
+			zlog.Error("unable to parse ws message", zap.Error(err))
+			return
+		}
+
+		if result.Error != nil {
+			zlog.Warn("received error message from ws server",
+				zap.Uint64("id", result.ID),
+				zap.Uint64("result", result.Result),
+				zap.Int("code", result.Error.Code),
+				zap.String("message", result.Error.Message),
+			)
+			return
+		}
+
 		if result.ID != 0 && result.Result != 0 {
 			c.handleNewSubscriptionMessage(result.ID, result.Result)
 			return
