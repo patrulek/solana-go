@@ -38,7 +38,7 @@ type Client struct {
 }
 
 type JSONRPCClient interface {
-	CallForInto(ctx context.Context, out interface{}, method string, params []interface{}) error
+	CallForInto(ctx context.Context, out interface{}, method string, params any) error
 	CallWithCallback(ctx context.Context, method string, params []interface{}, callback func(*http.Request, *http.Response) error) error
 	CallBatch(ctx context.Context, requests jsonrpc.RPCRequests) (jsonrpc.RPCResponses, error)
 }

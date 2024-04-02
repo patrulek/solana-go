@@ -120,7 +120,7 @@ type RPCClient interface {
 	// - RPCPersponses is enriched with helper functions e.g.: responses.HasError() returns  true if one of the responses holds an RPCError
 	CallBatchRaw(ctx context.Context, requests RPCRequests) (RPCResponses, error)
 
-	CallForInto(ctx context.Context, out interface{}, method string, params []interface{}) error
+	CallForInto(ctx context.Context, out interface{}, method string, params any) error
 	CallWithCallback(ctx context.Context, method string, params []interface{}, callback func(*http.Request, *http.Response) error) error
 	Close() error
 }
@@ -379,7 +379,7 @@ func (client *rpcClient) CallForInto(
 	ctx context.Context,
 	out interface{},
 	method string,
-	params []interface{},
+	params any,
 ) error {
 	request := &RPCRequest{
 		Method:  method,
