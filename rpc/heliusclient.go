@@ -2,6 +2,9 @@ package rpc
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/gagliardetto/solana-go"
 )
 
 type HeliusClient struct {
@@ -17,6 +20,44 @@ func NewHelius(rpcEndpoint string) *HeliusClient {
 type GetAssetOpts struct {
 	Id             string                      `json:"id"`
 	DisplayOptions *GetAssetOptsDisplayOptions `json:"displayOptions"`
+}
+
+type GetAssetsByOwnerSortByType string
+type GetAssetsByOwnerSortByDirection string
+
+const (
+	GetAssetsByOwnerSortByTypeCreated      GetAssetsByOwnerSortByType = "created"
+	GetAssetsByOwnerSortByTypeRecentAction GetAssetsByOwnerSortByType = "recent_action"
+	GetAssetsByOwnerSortByTypeUpdated      GetAssetsByOwnerSortByType = "updated"
+	GetAssetsByOwnerSortByTypeNone         GetAssetsByOwnerSortByType = "none"
+
+	GetAssetsByOwnerSortByDirectionAsc  GetAssetsByOwnerSortByDirection = "asc"
+	GetAssetsByOwnerSortByDirectionDesc GetAssetsByOwnerSortByDirection = "desc"
+)
+
+type GetAssetsByOwnerSortBy struct {
+	SortBy        GetAssetsByOwnerSortByType      `json:"sortBy"`
+	SortDirection GetAssetsByOwnerSortByDirection `json:"sortDirection"`
+}
+
+type GetAssetsByOwnerOptions struct {
+	ShowUnverifiedCollections bool `json:"showUnverifiedCollections"`
+	ShowCollectionMetadata    bool `json:"showCollectionMetadata"`
+	ShowGrandTotal            bool `json:"showGrandTotal"`
+	ShowFungible              bool `json:"showFungible"`
+	ShowNativeBalance         bool `json:"showNativeBalance"`
+	ShowInscription           bool `json:"showInscription"`
+	ShowZeroBalance           bool `json:"showZeroBalance"`
+}
+
+type GetAssetsByOwnerOpts struct {
+	OwnerAddress string                   `json:"ownerAddress"`
+	Page         *int                     `json:"page,omitempty"`
+	Limit        *int                     `json:"limit,omitempty"`
+	SortBy       *GetAssetsByOwnerSortBy  `json:"sortBy,omitempty"`
+	Before       *string                  `json:"before,omitempty"`
+	After        *string                  `json:"after,omitempty"`
+	Options      *GetAssetsByOwnerOptions `json:"options,omitempty"`
 }
 
 type GetAssetOptsDisplayOptions struct {
@@ -157,11 +198,13 @@ type GetAssetSupply struct {
 }
 
 type GetAssetTokenInfo struct {
-	Symbol       string             `json:"symbol"`
-	Supply       uint64             `json:"supply"`
-	Decimals     uint8              `json:"decimals"`
-	TokenProgram string             `json:"token_program"`
-	PriceInfo    *GetAssetPriceInfo `json:"price_info"`
+	Symbol          string             `json:"symbol"`
+	Supply          uint64             `json:"supply"`
+	Decimals        uint8              `json:"decimals"`
+	TokenProgram    string             `json:"token_program"`
+	PriceInfo       *GetAssetPriceInfo `json:"price_info"`
+	MintAuthority   string             `json:"mint_authority"`
+	FreezeAuthority string             `json:"freeze_authority"`
 }
 
 type GetAssetPriceInfo struct {
@@ -175,4 +218,89 @@ type GetAssetInscription struct {
 
 type GetAssetSPL20 struct {
 	// TODO
+}
+
+func (cl *HeliusClient) GetAssetsByOwner(
+	ctx context.Context,
+	opts GetAssetsByOwnerOpts,
+) (out *GetAssetsByOwnerResult, err error) {
+	if opts.OwnerAddress == "" {
+		return nil, fmt.Errorf("OwnerAddress is required")
+	}
+
+	if _, err := solana.PublicKeyFromBase58(opts.OwnerAddress); err != nil {
+		return nil, fmt.Errorf("OwnerAddress is not a valid public key")
+	}
+
+	params := M{}
+	params["ownerAddress"] = opts.OwnerAddress
+
+	if opts.Page != nil {
+		params["page"] = opts.Page
+	}
+	if opts.Limit != nil {
+		params["limit"] = opts.Limit
+	}
+	if opts.SortBy != nil {
+		params["sortBy"] = opts.SortBy
+	}
+	if opts.Before != nil {
+		params["before"] = opts.Before
+	}
+	if opts.After != nil {
+		params["after"] = opts.After
+	}
+	if opts.Options != nil {
+		params["options"] = opts.Options
+	}
+
+	err = cl.rpcClient.CallForInto(ctx, &out, "getAssetsByOwner", params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if out == nil {
+		return nil, ErrNotFound
+	}
+
+	return out, nil
+}
+
+type GetAssetsByOwnerResult struct {
+	Total         int                    `json:"total"`
+	Limit         int                    `json:"limit"`
+	Page          int                    `json:"page"`
+	Items         []GetAssetsByOwnerItem `json:"items"`
+	NativeBalance any                    `json:"native_balance"` // TODO
+}
+
+type GetAssetsByOwnerItem struct {
+	Interface      string                         `json:"interface"` // enum :V1_NFT V1_PRINT LEGACY_NFT V2_NFT FungibleAsset FungibleToken Custom Identity Executable ProgrammableNFT
+	Id             string                         `json:"id"`
+	Content        *GetAssetContent               `json:"content"`
+	Authorities    []GetAssetAuthorities          `json:"authorities"`
+	Compression    *GetAssetCompression           `json:"compression"`
+	Grouping       []GetAssetGrouping             `json:"grouping"`
+	Royalty        *GetAssetRoyalty               `json:"royalty"`
+	Creators       []GetAssetCreators             `json:"creators"`
+	Ownership      *GetAssetOwnership             `json:"ownership"`
+	MintExtensions *GetAssetMintExtensions        `json:"mint_extensions"`
+	Supply         *GetAssetSupply                `json:"supply"`
+	Mutable        *bool                          `json:"mutable"`
+	Burnt          *bool                          `json:"burnt"`
+	TokenInfo      *GetAssetsByOwnerItemTokenInfo `json:"token_info"`
+	Inscription    *GetAssetInscription           `json:"inscription"`
+	SPL20          *GetAssetSPL20                 `json:"spl20"`
+}
+
+type GetAssetsByOwnerItemTokenInfo struct {
+	Balance                uint64             `json:"balance"`
+	Supply                 uint64             `json:"supply"`
+	Decimals               uint8              `json:"decimals"`
+	TokenProgram           string             `json:"token_program"`
+	AssociatedTokenAddress string             `json:"associated_token_address"`
+	PriceInfo              *GetAssetPriceInfo `json:"price_info"`
+	MintAuthority          string             `json:"mint_authority"`
+	FreezeAuthority        string             `json:"freeze_authority"`
 }
