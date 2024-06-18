@@ -68,6 +68,10 @@ type BlockSubscribeOpts struct {
 
 	// Whether to populate the rewards array. If parameter not provided, the default includes rewards.
 	Rewards *bool
+
+	// Max transaction version to return in responses.
+	// If the requested block contains a transaction with a higher version, an error will be returned.
+	MaxSupportedTransactionVersion *uint64
 }
 
 // NOTE: Unstable, disabled by default
@@ -114,6 +118,9 @@ func (cl *Client) BlockSubscribe(
 		}
 		if opts.Rewards != nil {
 			obj["rewards"] = opts.Rewards
+		}
+		if opts.MaxSupportedTransactionVersion != nil {
+			obj["maxSupportedTransactionVersion"] = *opts.MaxSupportedTransactionVersion
 		}
 		if len(obj) > 0 {
 			params = append(params, obj)
