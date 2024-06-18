@@ -65,4 +65,6 @@ func (s *Subscription) Unsubscribe() {
 
 func (s *Subscription) unsubscribe(err error) {
 	s.closeFunc(err)
+	close(s.stream)
+	close(s.err)
 }
